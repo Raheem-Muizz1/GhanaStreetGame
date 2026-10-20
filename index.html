@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spar</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#120c07">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- Online play loads PeerJS on demand (needs internet). Games against the computer work offline. -->
+<style>
+:root{--gold:#f2b705;--red:#ce1126;--green:#006b3f;--ink:#1a1208}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;justify-content:center;color:#f4efe4;font-family:"Trebuchet MS",Verdana,sans-serif;background:radial-gradient(ellipse at 50% 0,#2a1b10,#120c07);border-top:8px solid;border-image:linear-gradient(90deg,var(--red) 33%,var(--gold) 33% 66%,var(--green) 66%) 1}
+#app{width:100%;max-width:560px;padding:14px;display:flex;flex-direction:column;gap:12px}
+h1{margin:4px 0 0;text-align:center;font:900 3rem Georgia,serif;letter-spacing:.12em;color:var(--gold)}
+h1.sm{font-size:1.6rem;margin:0}
+.panel{background:rgba(0,0,0,.35);border:1px solid rgba(242,183,5,.25);border-radius:12px;padding:14px}
+.btn{font:inherit;font-weight:bold;padding:12px 20px;border-radius:8px;border:2px solid var(--gold);background:var(--gold);color:var(--ink);cursor:pointer}
+.btn.alt{background:transparent;color:var(--gold)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:2px}
+input,select{font:inherit;padding:9px;border-radius:8px;border:0;width:100%}
+label{display:block;margin:10px 0 4px;font-size:.9rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.big{font-size:1.15rem;text-align:center;line-height:1.6}
+.muted{opacity:.75;font-size:.85rem;text-align:center}
+.code{font:900 2.6rem Georgia,serif;letter-spacing:.3em;color:var(--gold)}
+.status{text-align:center;min-height:1.5em;font-size:1.05rem}
+
+/* table */
+.rim{padding:11px;border-radius:30px;background:linear-gradient(135deg,#7a4a22,#4e2d14 50%,#7a4a22);box-shadow:0 12px 30px #000a,inset 0 2px 3px #fff3}
+.felt{position:relative;height:500px;border-radius:20px;overflow:hidden;background:radial-gradient(ellipse at 50% 42%,#26784d,#14492f 65%,#0d3321);box-shadow:inset 0 0 50px #000b}
+.seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px}
+.s-top{top:8px;left:50%;transform:translateX(-50%)}
+.s-left{left:2px;top:46%;transform:translateY(-50%)}
+.s-right{right:2px;top:46%;transform:translateY(-50%)}
+.s-me{bottom:8px;left:50%;transform:translateX(-50%)}
+.plate{font-size:.78rem;background:#0009;padding:3px 10px;border-radius:14px;white-space:nowrap;display:flex;gap:6px;max-width:100%}
+.nm{overflow:hidden;text-overflow:ellipsis}
+.s-left .plate,.s-right .plate{flex-direction:column;align-items:center;gap:0;max-width:58px;padding:3px 6px;font-size:.7rem}
+.turn .plate{background:var(--gold);color:var(--ink);font-weight:bold}
+.out{opacity:.4}
+.fan{display:flex}
+.fan .back+.back{margin-left:-20px}
+.fan.v{flex-direction:column}
+.fan.v .back+.back{margin-left:0;margin-top:-22px}
+.back{width:34px;height:48px;border-radius:5px;border:2px solid #f4efe4;background:repeating-linear-gradient(45deg,#8c1c2b 0 4px,#6e1421 4px 8px);box-shadow:0 1px 3px #000a}
+.back.side{width:48px;height:34px}
+.center{position:absolute;left:50%;top:46%;width:0;height:0}
+.pl{position:absolute;left:0;top:0;--w:50px;transform:translate(-50%,-50%) translate(var(--dx),var(--dy)) rotate(var(--r))}
+.pl.win{filter:drop-shadow(0 0 8px var(--gold))}
+.pl.new{animation:land .35s ease-out}
+@keyframes land{from{opacity:.2;transform:translate(-50%,-50%) translate(var(--fx),var(--fy)) rotate(calc(var(--r)*3)) scale(1.15)}}
+@media(prefers-reduced-motion:reduce){.pl.new,.pl.sweep,.hand .card.dealt,.cf{animation:none}}
+.tools{position:fixed;top:14px;right:12px;display:flex;gap:6px;z-index:60}
+.ibtn{font:inherit;font-size:1.05rem;min-width:40px;height:40px;border-radius:50%;border:1px solid rgba(242,183,5,.5);background:rgba(0,0,0,.45);color:#f4efe4;cursor:pointer}
+.emo{display:flex;gap:6px;justify-content:center}
+.emo .ibtn{border-radius:10px}
+.modal{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
+.sheet{background:#1d140c;border:1px solid var(--gold);border-radius:14px;padding:18px;max-width:480px;max-height:90vh;overflow:auto;line-height:1.5}
+.sheet h2{margin:0 0 8px;color:var(--gold)}
+.sheet li{margin-bottom:6px}
+.bub{position:fixed;font-size:2.2rem;pointer-events:none;z-index:90;animation:floatup 2.2s ease-out forwards}
+@keyframes floatup{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-70px)}}
+.cfbox{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:80}
+.cf{position:absolute;top:-14px;width:8px;height:13px;animation:fall 3s linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg)}}
+.pl.sweep{animation:sweep var(--sdur,.5s) ease-in var(--sdel,1.1s) forwards}
+@keyframes sweep{to{opacity:.15;transform:translate(-50%,-50%) translate(calc(var(--dx) + var(--wx)),calc(var(--dy) + var(--wy))) rotate(var(--r)) scale(.6)}}
+.hand .card.dealt{animation:dealin .4s ease-out backwards;animation-delay:calc(var(--i)*.08s)}
+@keyframes dealin{from{opacity:0;transform:translateY(-220px) rotate(-14deg)}}
+.stack{display:flex;justify-content:center;margin-bottom:12px}
+.stack .back{width:46px;height:64px}
+.stack .back+.back{margin-left:-38px}
+input[type=range]{width:100%;padding:0}
+
+/* cards */
+.card{--w:62px;position:relative;width:var(--w);height:calc(var(--w)*1.4);font-size:calc(var(--w)*.21)}
+.face{display:block;padding:0;border:1px solid #bdb59f;border-radius:calc(var(--w)*.09);background:linear-gradient(160deg,#fff,#eee7d6);color:#181818;font-family:Georgia,serif;line-height:1;box-shadow:0 2px 6px #0009}
+.face.red{color:#c8102e}
+.ix{position:absolute;top:.3em;left:.3em;text-align:center;font-weight:bold;font-size:.9em}
+.ix.r{top:auto;left:auto;bottom:.3em;right:.3em;transform:rotate(180deg)}
+.mid{position:absolute;inset:.5em 1.2em;display:flex;justify-content:space-between}
+.col{display:flex;flex-direction:column;justify-content:space-around;align-items:center}
+.col i{font-style:normal;font-size:.95em}
+.royal{flex:1;border:1px solid currentColor;border-radius:.3em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15em;background:rgba(0,0,0,.04)}
+.royal b{font-size:2.2em}
+.hand{display:flex;padding-top:12px}
+.hand .card+.card{margin-left:-14px}
+.hand .card{transition:transform .15s;cursor:default}
+.hand .card.ok{transform:translateY(-10px);cursor:pointer}
+.hand .card.ok:hover{transform:translateY(-18px)}
+.hand .card.no{filter:brightness(.55)}
+/* cards already played this round stay on the table in front of each player */
+.lane{position:absolute;display:flex}
+.l-top{top:88px;left:50%;transform:translateX(-50%)}
+.l-me{bottom:134px;left:50%;transform:translateX(-50%)}
+.l-left{left:62px;top:46%;transform:translateY(-50%);flex-direction:column}
+.l-right{right:62px;top:46%;transform:translateY(-50%);flex-direction:column}
+.lane .card{--w:36px}
+.l-top .card+.card,.l-me .card+.card{margin-left:-12px}
+.l-left .card+.card,.l-right .card+.card{margin-top:-30px}
+.mini .mid,.mini .ix.r,.mini .ix br{display:none}
+.mini .ix{font-size:1.4em}
+</style>
+<style id="classic">
+/* classic look: woven strip, leather panels, brass, felt, paper cards */
+:root{--noise:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxODAnIGhlaWdodD0nMTgwJz48ZmlsdGVyIGlkPSduJz48ZmVUdXJidWxlbmNlIHR5cGU9J2ZyYWN0YWxOb2lzZScgYmFzZUZyZXF1ZW5jeT0nLjg1JyBudW1PY3RhdmVzPScyJyBzdGl0Y2hUaWxlcz0nc3RpdGNoJy8+PGZlQ29sb3JNYXRyaXggdmFsdWVzPScwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAuMiAwJy8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsdGVyPSd1cmwoI24pJy8+PC9zdmc+");--grain:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMjAnIGhlaWdodD0nMTIwJz48ZmlsdGVyIGlkPSduJz48ZmVUdXJidWxlbmNlIHR5cGU9J2ZyYWN0YWxOb2lzZScgYmFzZUZyZXF1ZW5jeT0nLjknIG51bU9jdGF2ZXM9JzMnIHN0aXRjaFRpbGVzPSdzdGl0Y2gnLz48ZmVDb2xvck1hdHJpeCB2YWx1ZXM9JzAgMCAwIDAgLjQ1IDAgMCAwIDAgLjM2IDAgMCAwIDAgLjIgMCAwIDAgLjIyIDAnLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0nMTAwJScgaGVpZ2h0PScxMDAlJyBmaWx0ZXI9J3VybCgjbiknLz48L3N2Zz4=")}
+body{font-family:Georgia,"Palatino Linotype",Palatino,serif;border-top:0;border-image:none;background:var(--noise),radial-gradient(ellipse at 50% -10%,#3a2615,#0e0905 72%);background-size:180px 180px,auto;background-attachment:fixed}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:10px;z-index:70;box-shadow:0 2px 6px #000a;background:repeating-linear-gradient(90deg,#ce1126 0 16px,#111 16px 19px,#f2b705 19px 35px,#111 35px 38px,#006b3f 38px 54px,#111 54px 57px)}
+h1{font:900 3.1rem Georgia,"Palatino Linotype",serif;letter-spacing:.16em;margin-top:34px;color:#f2b705;text-shadow:0 1px 0 #fff0a8,0 2px 0 #b98400,0 3px 0 #7a5600,0 8px 12px rgba(0,0,0,.8)}
+h1::after{content:"\2660  \2665  \2663  \2666";display:block;font-size:.85rem;letter-spacing:.6em;font-weight:400;color:#b89a54;text-shadow:none;margin-top:2px}
+h1.sm{font-size:1.6rem;margin-top:0;letter-spacing:.14em}
+h1.sm::after{display:none}
+.panel{background:linear-gradient(#21160d,#150e08);border:1px solid rgba(242,183,5,.4);box-shadow:inset 0 0 0 3px #0b0704,inset 0 0 0 4px rgba(242,183,5,.18),0 10px 22px rgba(0,0,0,.6)}
+label{color:#dcc88f;letter-spacing:.03em}
+input,select{font-family:inherit;background:#f4ecd8;color:#2a1a08;border:1px solid #b89a54;box-shadow:inset 0 2px 4px rgba(0,0,0,.3)}
+.btn{font-family:inherit;letter-spacing:.04em;color:#2a1a05;background:linear-gradient(#ffd966,#e0a90a 55%,#b98400);border:1px solid #7a5600;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 0 #7a5600,0 7px 12px rgba(0,0,0,.6);text-shadow:0 1px 0 rgba(255,235,160,.8)}
+.btn:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 #7a5600,0 3px 6px rgba(0,0,0,.6)}
+.btn.alt{color:#f2d27a;background:rgba(0,0,0,.35);border:1px solid rgba(242,183,5,.7);box-shadow:inset 0 0 0 2px rgba(0,0,0,.4);text-shadow:none}
+.code{text-shadow:0 2px 0 #7a5600,0 6px 10px #000}
+.status{font-style:italic;color:#f1e3b8;text-shadow:0 1px 2px #000;background:linear-gradient(#1b120a,#110a05);border:1px solid rgba(242,183,5,.3);border-radius:10px;padding:8px 12px;min-height:2.4em}
+.tools{top:16px;gap:5px}
+.ibtn{min-width:36px;height:36px;font-size:1rem;background:linear-gradient(#3a2a1a,#150e08);border-color:rgba(242,183,5,.65);box-shadow:0 2px 5px rgba(0,0,0,.6)}
+.ibtn.off{opacity:.45}
+.sheet{background:linear-gradient(#23170e,#150e08);font-family:Georgia,serif;box-shadow:0 18px 50px #000}
+/* table */
+.rim{background:repeating-linear-gradient(91deg,rgba(0,0,0,.1) 0 2px,transparent 2px 9px),linear-gradient(135deg,#8a5528,#52301a 45%,#7d4d24 70%,#4a2a14);box-shadow:0 22px 44px rgba(0,0,0,.85),inset 0 2px 2px rgba(255,255,255,.3),inset 0 -4px 8px rgba(0,0,0,.55)}
+.felt{background:var(--noise),radial-gradient(ellipse at 50% 40%,#2b8556 0%,#17543a 55%,#0b2e20 100%);background-size:180px 180px,auto;box-shadow:inset 0 0 70px rgba(0,0,0,.85),0 0 0 3px #2a1608,0 0 0 4px rgba(242,183,5,.45)}
+.felt::before{content:"\2660";position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);font-size:150px;line-height:1;color:rgba(0,0,0,.14);text-shadow:0 1px 0 rgba(255,255,255,.07);pointer-events:none}
+.felt::after{content:"";position:absolute;inset:9px;border:1px dashed rgba(242,183,5,.32);border-radius:14px;pointer-events:none}
+.seat,.lane,.center{z-index:1}
+.plate{font-family:Georgia,serif;letter-spacing:.02em;color:#f4e7c4;background:linear-gradient(#2c1e11,#150e07);border:1px solid rgba(242,183,5,.55);box-shadow:0 2px 5px rgba(0,0,0,.7)}
+.turn .plate{color:#2a1a05;background:linear-gradient(#ffd966,#d9a008);border-color:#fff3b0;box-shadow:0 0 16px rgba(242,183,5,.75)}
+/* cards: paper, gloss, deep shadow */
+.face{overflow:hidden;background:linear-gradient(155deg,#fffef9,#f3ecda 62%,#e6dcc2);border:1px solid #a89f86;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7),0 1px 1px rgba(0,0,0,.5),0 4px 9px rgba(0,0,0,.55)}
+.face::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(118deg,rgba(255,255,255,.6),rgba(255,255,255,0) 38%)}
+.face::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:var(--grain);mix-blend-mode:multiply;opacity:.7}
+.pl .face{box-shadow:inset 0 0 0 1px rgba(255,255,255,.7),0 1px 1px rgba(0,0,0,.5),0 9px 16px rgba(0,0,0,.6)}
+.col i{font-size:1.05em}
+.royal{background:linear-gradient(135deg,rgba(242,183,5,.3),rgba(255,255,255,0) 55%,rgba(206,17,38,.1)),repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.05) 3px 6px);border:1.5px solid currentColor;border-radius:.35em;box-shadow:inset 0 0 0 .18em #fffdf3,inset 0 0 0 .24em currentColor;gap:0}
+.royal u{text-decoration:none;font-size:1.25em;line-height:1}
+.royal b{font-size:1.9em;line-height:1}
+.royal i{font-style:normal;font-size:1.2em}
+.back{border:2px solid #f7f0dc;border-radius:6px;background:radial-gradient(circle,#e8c15a 0 2px,transparent 2.5px) 0 0/9px 9px,repeating-linear-gradient(45deg,#7d1626 0 3px,#5f0f1d 3px 6px);box-shadow:inset 0 0 0 2px #6a111e,inset 0 0 0 3px #d9b24a,0 2px 5px rgba(0,0,0,.7)}
+/* your hand fans out like a real hand */
+.hand{padding-top:16px}
+.hand .card{transform-origin:50% 130%;transform:translateY(var(--ar,0px)) rotate(var(--rot,0deg))}
+.hand .card+.card{margin-left:-17px}
+.hand .card.ok{transform:translateY(calc(var(--ar,0px) - 10px)) rotate(var(--rot,0deg))}
+.hand .card.ok:hover{transform:translateY(calc(var(--ar,0px) - 20px)) rotate(var(--rot,0deg))}
+</style>
+<style id="lively">
+/* lively: drifting suits, aurora light, shimmering title, chips, pulses, pops */
+#app{position:relative;z-index:1}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(circle at 20% 30%,rgba(206,17,38,.16),transparent 42%),radial-gradient(circle at 80% 20%,rgba(242,183,5,.13),transparent 42%),radial-gradient(circle at 50% 95%,rgba(0,107,63,.2),transparent 48%);animation:aurora 14s ease-in-out infinite alternate}
+@keyframes aurora{to{transform:translate3d(3%,-2%,0) scale(1.15)}}
+.drift{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.drift span{position:absolute;bottom:-90px;color:rgba(242,183,5,.1);animation:drift linear infinite}
+@keyframes drift{from{transform:translateY(0) rotate(0)}to{transform:translateY(-115vh) rotate(360deg)}}
+h1{background:linear-gradient(100deg,#c98f00 0%,#f2b705 35%,#fff4b8 50%,#f2b705 65%,#c98f00 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none;filter:drop-shadow(0 2px 0 #7a5600) drop-shadow(0 7px 8px rgba(0,0,0,.8));animation:shine 5s linear infinite}
+h1::after{-webkit-text-fill-color:#b89a54}
+@keyframes shine{to{background-position:-250% 0}}
+.menu>.panel,.menu>#inst{animation:rise .55s cubic-bezier(.2,.8,.2,1) backwards}
+.menu>.panel:nth-of-type(2){animation-delay:.1s}
+.menu>.panel:nth-of-type(3){animation-delay:.2s}
+@keyframes rise{from{opacity:0;transform:translateY(26px) scale(.97)}}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{flex:1;min-width:58px;font:inherit;padding:10px 8px;border-radius:10px;border:1px solid rgba(242,183,5,.5);background:rgba(0,0,0,.35);color:#f2d27a;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s}
+.chips button:hover{transform:translateY(-2px)}
+.chips button.on{background:linear-gradient(#ffd966,#d9a008);color:#2a1a05;font-weight:bold;transform:translateY(-2px);box-shadow:0 5px 12px rgba(242,183,5,.4)}
+#mhint{margin-top:6px;min-height:2.4em}
+.btn{transition:transform .15s,filter .15s}
+.btn:hover{transform:translateY(-2px) scale(1.03);filter:brightness(1.1)}
+#go,#st,#again,#cut{animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 0 #7a5600,0 7px 12px rgba(0,0,0,.6),0 0 0 0 rgba(242,183,5,.55)}60%{box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 0 #7a5600,0 7px 12px rgba(0,0,0,.6),0 0 0 11px rgba(242,183,5,0)}}
+input[type=range]{accent-color:#f2b705}
+/* table */
+.turn .plate{animation:plateglow 1.4s ease-in-out infinite}
+@keyframes plateglow{50%{box-shadow:0 0 28px rgba(255,217,102,1)}}
+.fan .back,.stack .back{animation:breathe 4s ease-in-out infinite}
+.fan .back:nth-child(2n),.stack .back:nth-child(2n){animation-delay:-1s}
+.fan .back:nth-child(3n),.stack .back:nth-child(3n){animation-delay:-2s}
+@keyframes breathe{50%{translate:0 -2px}}
+.hand .card.ok{filter:drop-shadow(0 0 7px rgba(242,183,5,.75))}
+.hand .card.ok:not(.dealt){animation:bob 1.8s ease-in-out infinite;animation-delay:calc(var(--i)*.12s)}
+.hand .card.ok:hover{animation:none}
+@keyframes bob{50%{translate:0 -4px}}
+@keyframes land{from{opacity:.2;transform:translate(-50%,-50%) translate(var(--fx),var(--fy)) rotate(calc(var(--r)*3)) perspective(500px) rotateY(75deg) scale(1.15)}}
+.status{font-size:1.1rem}
+.status.pop{animation:popin .4s cubic-bezier(.2,1.4,.4,1)}
+@keyframes popin{from{transform:scale(.85);opacity:.3}}
+.status .mine,.finalt{color:#ffd966;font-weight:bold;animation:glowtxt 1.3s ease-in-out infinite}
+.finalt{letter-spacing:.08em}
+@keyframes glowtxt{50%{text-shadow:0 0 14px rgba(255,217,102,.95)}}
+.flt{position:fixed;font:900 2rem Georgia,serif;color:#ffd966;text-shadow:0 2px 0 #7a5600,0 0 14px rgba(242,183,5,.9);pointer-events:none;z-index:95;animation:floatup2 1.8s ease-out forwards}
+@keyframes floatup2{from{opacity:0;transform:translate(-50%,10px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.25)}to{opacity:0;transform:translate(-50%,-90px) scale(1)}}
+.score-bump{display:inline-block;animation:bump .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes bump{from{transform:scale(2.2);color:#ffd966}}
+.emo .ibtn{transition:transform .15s}
+.emo .ibtn:hover{transform:translateY(-4px) scale(1.2)}
+.emo .ibtn:active{transform:scale(.9)}
+.bub{font-size:2.8rem;filter:drop-shadow(0 4px 6px rgba(0,0,0,.6))}
+.trophy{font-size:3.5rem;animation:trophy 1.2s ease-in-out infinite}
+@keyframes trophy{50%{transform:translateY(-8px) rotate(6deg) scale(1.1)}}
+.winner{font-size:1.5rem;color:#ffd966;font-weight:bold;text-shadow:0 2px 0 #7a5600;margin-bottom:6px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
+</style>
+<style id="board">
+/* board and environment: racetrack table, leather rail, string lights, rug, lamp, avatars */
+.scene{position:relative;padding-top:26px;isolation:isolate}
+.scene::before{content:"";position:absolute;left:-14px;right:-14px;top:44px;bottom:-14px;border-radius:130px;z-index:-1;opacity:.6;background:repeating-linear-gradient(90deg,rgba(206,17,38,.4) 0 10px,rgba(0,0,0,.45) 10px 12px,rgba(242,183,5,.35) 12px 22px,rgba(0,0,0,.45) 22px 24px,rgba(0,107,63,.4) 24px 34px,rgba(0,0,0,.45) 34px 36px)}
+.scene::after{content:"";position:absolute;left:0;right:0;top:26px;bottom:0;border-radius:118px;pointer-events:none;z-index:3;mix-blend-mode:soft-light;background:radial-gradient(ellipse at 50% 28%,rgba(255,225,150,.3),transparent 62%)}
+.lights{position:absolute;left:4%;right:4%;top:0;height:30px;pointer-events:none;z-index:4}
+.lights svg{position:absolute;inset:0;width:100%;height:100%}
+.lights i{position:absolute;width:8px;height:11px;border-radius:50% 50% 45% 45%;background:var(--c);box-shadow:0 0 10px 3px var(--c);transform:translate(-50%,0);animation:twinkle 2.4s ease-in-out infinite}
+@keyframes twinkle{50%{opacity:.45;box-shadow:0 0 4px 1px var(--c)}}
+.rim{padding:17px;border-radius:118px}
+.felt{height:530px;border-radius:100px;box-shadow:inset 0 0 70px rgba(0,0,0,.85),0 0 0 5px #5a1d1d,0 0 0 6px #e0bd5c,0 0 0 8px #2a1608,0 7px 0 8px #1d0f05}
+.felt::after{inset:10px;border-radius:84px}
+.felt::before{top:47%}
+.s-left,.s-right{top:47%}
+.center{top:47%}
+.l-top{top:104px}
+.l-me{bottom:158px}
+.l-left,.l-right{top:47%}
+.who{display:flex;align-items:center;gap:6px}
+.s-left .who,.s-right .who{flex-direction:column;gap:3px}
+.plate{flex-wrap:wrap;justify-content:center}
+.pg{flex-basis:100%;text-align:center;font-size:.58rem;letter-spacing:.12em;color:#ffd966;line-height:1}
+.pg:empty{display:none}
+.av{width:38px;height:38px;flex:none;border-radius:50%;border:2px solid #d9b24a;box-shadow:0 2px 6px rgba(0,0,0,.7);overflow:hidden;background:#222}
+.av svg{display:block;width:100%;height:100%}
+.av.big{width:84px;height:84px;margin:0 auto 6px}
+.turn .av{animation:ringglow 1.4s ease-in-out infinite}
+@keyframes ringglow{50%{box-shadow:0 0 18px 4px rgba(255,217,102,.95)}}
+.out .av{filter:grayscale(1)}
+.av .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+.lrow{display:flex;align-items:center;gap:8px;justify-content:center;margin:5px 0}
+.avpick{display:flex;gap:6px;flex-wrap:wrap}
+.avb{width:44px;height:44px;border-radius:50%;padding:0;border:2px solid rgba(242,183,5,.35);overflow:hidden;background:none;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.avb svg{display:block;width:100%;height:100%}
+.avb.on{border-color:#ffd966;transform:scale(1.14);box-shadow:0 0 12px rgba(255,217,102,.8)}
+.status{min-height:3.4em}
+.status small{display:block;opacity:.55;font-size:.72rem;font-style:normal}
+.pl.new{animation-duration:.26s}
+.hand .card.dealt{animation-duration:.3s}
+.felt{cursor:default}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ===== EDIT THE RULES AND THE COMPUTER PLAYERS HERE =====
+const CONFIG = {
+  ranks: ["6","7","8","9","10","J","Q","K"],   // lowest to highest
+  suits: ["♥","♦","♣","♠"],
+  handSize: 5,                // also the number of tricks per round
+  bonusRank: "6", bonusPoints: 2, normalPoints: 1,
+  defaultTarget: 5,
+  cpuNames: ["Kofi","Ama","Kwame"],
+  cpuMistakes: 0.15,          // chance the computer plays a random legal card
+  // game speeds: computer thinking time, pause after a trick, pause after a round (milliseconds)
+  speeds: { relaxed: { cpu: [800, 1500], trick: 1700, round: 3200 }, normal: { cpu: [450, 900], trick: 1100, round: 2300 }, fast: { cpu: [220, 480], trick: 650, round: 1400 } },
+  defaultSpeed: "fast",
+  // Online play. These servers help two phones find each other when they are on different networks.
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"], username: "peerjs", credential: "peerjsp" },
+    { urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443?transport=tcp"], username: "openrelayproject", credential: "openrelayproject" }
+  ],
+  peerServer: null   // or your own PeerServer, e.g. { host: "my-server.example.com", port: 443, path: "/", secure: true }
+};
+// ========================================================
+
+const RED = new Set(["♥","♦"]);
+const CROWN = { K: "\u265A", Q: "\u265B", J: "\u265E" };
+const PIPS = { "6":[3,0,3], "7":[3,1,3], "8":[3,2,3], "9":[4,1,4], "10":[4,2,4] };
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let lastSt = "", G = null, seen = {}, runId = 0, lastV = null, deferred = null, net = { peer: null, conn: null, isHost: false };
+const EMOJIS = ["👏","😂","😮","🔥","😡","👍"];
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const lsDel = k => { try { localStorage.removeItem(k); } catch (e) {} };
+const AVATARS = [
+  { skin: "#8d5524", hair: "#1a1109", style: "short", shirt: "#ce1126", bg: "#f2b705" },
+  { skin: "#c68642", hair: "#2a1b0e", style: "afro", shirt: "#f2b705", bg: "#006b3f" },
+  { skin: "#5a3825", hair: "#0d0a07", style: "braids", shirt: "#006b3f", bg: "#ce1126" },
+  { skin: "#3b2219", hair: "#0d0a07", style: "gele", shirt: "#7b2cbf", wrap: "#f2b705", bg: "#1d6fb8" },
+  { skin: "#a9713f", hair: "#3b2a1a", style: "cap", shirt: "#1d6fb8", wrap: "#ce1126", bg: "#f2b705" },
+  { skin: "#e0ac69", hair: "#6b3f1d", style: "bun", shirt: "#e8590c", bg: "#7b2cbf" },
+  { skin: "#7a4a2a", hair: "#bfbfbf", style: "beard", shirt: "#12b886", bg: "#ce1126" },
+  { skin: "#4a2c1d", hair: "#111", style: "fade", shirt: "#d6336c", bg: "#f2b705", glasses: true }
+];
+function avatarSVG(i, mood = "neutral") {   // hand-drawn SVG faces; the expression follows the game
+  const a = AVATARS[(i | 0) % AVATARS.length], dk = "#1a1109", H = a.hair;
+  const back = a.style === "afro" ? `<circle cx="32" cy="21" r="19" fill="${H}"/>` : a.style === "braids" ? `<rect x="15" y="22" width="4" height="26" rx="2" fill="${H}"/><rect x="45" y="22" width="4" height="26" rx="2" fill="${H}"/>` : "";
+  const cap = `<path d="M19 28Q18 11 32 11Q46 11 45 28Q41 19 32 19Q23 19 19 28Z" fill="${H}"/>`;
+  const front = { short: cap, braids: cap,
+    afro: `<path d="M20 26Q22 17 32 17Q42 17 44 26Q38 21 32 21Q26 21 20 26Z" fill="${H}"/>`,
+    gele: `<path d="M15 26Q15 8 32 8Q49 8 49 26Q41 15 32 15Q23 15 15 26Z" fill="${a.wrap}"/><path d="M28 9Q36 -1 49 6Q42 8 40 13Z" fill="${a.wrap}"/><path d="M20 20Q32 10 44 20" stroke="rgba(0,0,0,.25)" fill="none" stroke-width="1.5"/>`,
+    cap: `<path d="M18 25Q20 10 32 10Q44 10 46 25Z" fill="${a.wrap}"/><rect x="30" y="23" width="24" height="4" rx="2" fill="${a.wrap}"/>`,
+    bun: `<circle cx="32" cy="9" r="6" fill="${H}"/>` + cap,
+    beard: `<path d="M19 27Q19 14 32 14Q45 14 45 27Q41 20 32 20Q23 20 19 27Z" fill="${H}"/><path d="M19 30Q20 47 32 47Q44 47 45 30Q41 40 32 40Q23 40 19 30Z" fill="${H}"/>`,
+    fade: `<path d="M20 26Q20 14 32 14Q44 14 44 26Q40 19 32 19Q24 19 20 26Z" fill="${H}"/>` }[a.style];
+  const eye = (x, y) => `<ellipse class="eye" cx="${x}" cy="${y}" rx="1.8" ry="2.2" fill="${dk}"/>`;
+  const arc = x => `<path d="M${x - 2.5} 30Q${x} 26.5 ${x + 2.5} 30" stroke="${dk}" fill="none" stroke-width="1.7" stroke-linecap="round"/>`;
+  const eyes = mood === "cool" ? `<rect x="20" y="26" width="10" height="6" rx="2.5" fill="#111"/><rect x="34" y="26" width="10" height="6" rx="2.5" fill="#111"/><path d="M30 28h4" stroke="#111" stroke-width="1.6"/><path d="M22 27l3-1" stroke="#fff" stroke-width="1" opacity=".6"/>`
+    : mood === "happy" ? arc(26) + arc(38) : mood === "think" ? eye(26, 28) + eye(38, 28) : eye(26, 29) + eye(38, 29);
+  const brows = mood === "sad" ? `<path d="M22 26L29 23.5M42 26L35 23.5" stroke="${dk}" stroke-width="1.5" stroke-linecap="round"/>` : mood === "cool" ? "" : `<path d="M23 25Q26 23 29 25M35 25Q38 23 41 25" stroke="${dk}" fill="none" stroke-width="1.4" stroke-linecap="round"/>`;
+  const mouth = { neutral: `<path d="M27 38Q32 40.5 37 38" stroke="${dk}" fill="none" stroke-width="1.7" stroke-linecap="round"/>`,
+    happy: `<path d="M25 36Q32 45 39 36Z" fill="#fff" stroke="${dk}" stroke-width="1.5" stroke-linejoin="round"/>`,
+    sad: `<path d="M26 41Q32 36 38 41" stroke="${dk}" fill="none" stroke-width="1.7" stroke-linecap="round"/>`,
+    think: `<ellipse cx="32" cy="39" rx="2" ry="2.5" fill="${dk}"/>`,
+    cool: `<path d="M26 38Q32 42.5 39 36" stroke="${dk}" fill="none" stroke-width="1.7" stroke-linecap="round"/>` }[mood] || "";
+  const blush = mood === "happy" ? '<circle cx="21.5" cy="35" r="2.3" fill="rgba(255,80,80,.35)"/><circle cx="42.5" cy="35" r="2.3" fill="rgba(255,80,80,.35)"/>' : "";
+  const glasses = a.glasses && mood !== "cool" ? `<g fill="none" stroke="#222" stroke-width="1.3"><circle cx="26" cy="29" r="4.6"/><circle cx="38" cy="29" r="4.6"/><path d="M30.6 29h2.8"/></g>` : "";
+  return `<svg viewBox="0 0 64 64" role="img" aria-label="avatar"><rect width="64" height="64" fill="${a.bg}"/><circle cx="20" cy="14" r="28" fill="rgba(255,255,255,.2)"/>${back}
+    <path d="M6 64Q8 47 32 45Q56 47 58 64Z" fill="${a.shirt}"/><path d="M24 46Q32 54 40 46" stroke="#f2b705" stroke-width="2.4" fill="none"/><path d="M8 58H56" stroke="rgba(255,255,255,.28)" stroke-width="3"/>
+    <rect x="27" y="40" width="10" height="9" fill="${a.skin}"/><rect x="27" y="40" width="10" height="4" fill="rgba(0,0,0,.2)"/>
+    <circle cx="19" cy="31" r="2.6" fill="${a.skin}"/><circle cx="45" cy="31" r="2.6" fill="${a.skin}"/><ellipse cx="32" cy="30" rx="13" ry="15" fill="${a.skin}"/>${front}${brows}${eyes}${glasses}${blush}${mouth}</svg>`;
+}
+const LIGHTS = (() => {   // string lights hung above the table
+  const cols = ["#ff4d4d", "#ffd966", "#4ade80", "#fff4cf"]; let h = "";
+  for (let k = 0; k < 11; k++) { const t = k / 10, y = (1 - t) ** 2 * 3 + 2 * t * (1 - t) * 27 + t * t * 3; h += `<i style="left:${t * 100}%;top:${(y + 1).toFixed(1)}px;--c:${cols[k % 4]};animation-delay:-${(k * .37).toFixed(2)}s"></i>`; }
+  return `<div class="lights" aria-hidden="true"><svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0 3Q50 27 100 3" fill="none" stroke="#2b1c10" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>${h}</div>`;
+})();
+const POSMAP = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
+const posFor = (v, p) => { const n = v.names.length, r = (p - v.me + n) % n; return r === 0 ? "me" : POSMAP[n][r - 1]; };
+const SP = () => CONFIG.speeds[G && G.speed] || CONFIG.speeds.fast;
+const isBot = s => s.type === "cpu" || !!s.away;   // computer players, and humans who are away
+
+function makeDeck() { const d = []; for (const s of CONFIG.suits) CONFIG.ranks.forEach((r, v) => d.push({ r, s, v })); return d; }
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const nextAlive = i => { let j = i; do { j = (j + 1) % G.seats.length; } while (!G.alive[j]); return j; };
+
+/* ---------- card drawing ---------- */
+function inner(c) {
+  const ix = `<div class="ix">${c.r}<br>${c.s}</div><div class="ix r">${c.r}<br>${c.s}</div>`;
+  const mid = PIPS[c.r]
+    ? PIPS[c.r].map(n => `<div class="col">${`<i>${c.s}</i>`.repeat(n)}</div>`).join("")
+    : `<div class="royal">${CROWN[c.r] ? `<u>${CROWN[c.r]}&#xFE0E;</u>` : ""}<b>${c.r}</b><i>${c.s}</i></div>`;
+  return ix + `<div class="mid">${mid}</div>`;
+}
+const face = c => `<div class="card face${RED.has(c.s) ? " red" : ""}">${inner(c)}</div>`;
+
+/* ---------- sound, rules, reactions ---------- */
+let AC = null, muted = lsGet("spar-mute", false);
+function sfx(k) {   // all sounds are synthesized, no audio files needed
+  if (muted) return;
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); } catch (e) { return; }
+  const t = AC.currentTime;
+  const tone = (f, d, type = "sine", g = .12, at = 0) => { const o = AC.createOscillator(), n = AC.createGain(); o.type = type; o.frequency.value = f; n.gain.setValueAtTime(g, t + at); n.gain.exponentialRampToValueAtTime(.001, t + at + d); o.connect(n).connect(AC.destination); o.start(t + at); o.stop(t + at + d); };
+  const noise = (d, g, at, f) => { const len = AC.sampleRate * d | 0, b = AC.createBuffer(1, len, AC.sampleRate), a = b.getChannelData(0); for (let i = 0; i < len; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / len); const s = AC.createBufferSource(), fl = AC.createBiquadFilter(), n = AC.createGain(); fl.type = "bandpass"; fl.frequency.value = f; n.gain.value = g; s.buffer = b; s.connect(fl).connect(n).connect(AC.destination); s.start(t + at); };
+  const S = {
+    card: () => { noise(.08, .6, 0, 2500); tone(120, .1, "sine", .15); },
+    deal: () => [0, .08, .16, .24, .32].forEach(a => noise(.06, .4, a, 3200)),
+    tick: () => tone(660, .12, "triangle", .08),
+    win: () => { tone(523, .15, "triangle", .12); tone(784, .25, "triangle", .12, .1); },
+    ko: () => { tone(180, .4, "sawtooth", .08); tone(120, .5, "sawtooth", .08, .15); },
+    fanfare: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .3, "triangle", .14, i * .14)),
+    pop: () => tone(900, .08, "sine", .1),
+    turn: () => { tone(740, .09, "sine", .07); tone(988, .12, "sine", .07, .08); }
+  };
+  if (S[k]) S[k]();
+}
+/* ---------- background music: a synthesized talking-drum ensemble ---------- */
+let music = lsGet("spar-music", true), mTimer = null, mNext = 0, mStep = 0, mGain = null, mPhrase = [];
+const STEP = 60 / 100 / 3;                 // 12/8 feel at 100 BPM: three steps per beat
+const BELL = [0, 2, 4, 5, 7, 9, 11];       // the classic African bell pattern
+// talking-drum phrases over two bars (24 steps): [step, pitch in Hz, bend ratio, strength]
+const PHRASES = [
+  [[0, 210, 1.5, 1], [3, 170, 1.3, .7], [6, 250, 1.45, .9], [8, 190, .7, .8], [10, 290, 1.3, .8], [12, 220, 1.6, 1], [15, 180, 1.25, .7], [18, 260, .75, .9], [20, 230, 1.5, .8], [22, 310, 1.2, .9]],
+  [[0, 240, 1.4, 1], [2, 190, 1.2, .6], [4, 280, 1.5, .8], [7, 200, .65, .8], [12, 250, 1.35, 1], [14, 200, 1.5, .8], [16, 300, 1.25, .8], [19, 170, .7, .9], [21, 260, 1.4, .8]],
+  [[0, 200, 1.7, 1], [5, 230, .7, .8], [6, 260, 1.4, .9], [9, 180, 1.3, .7], [12, 210, 1.5, 1], [17, 240, 1.2, .7], [18, 290, 1.5, .9], [23, 200, .8, .8]],
+  []                                        // two bars of rest, so the music breathes
+];
+function playStep(n, t) {
+  const s = n % 12, ph = n % 24;
+  if (ph === 0) mPhrase = PHRASES[Math.random() * PHRASES.length | 0];
+  const osc = (f, f2, d, g, type = "sine") => { const x = AC.createOscillator(), y = AC.createGain(); x.type = type; x.frequency.setValueAtTime(f, t); x.frequency.exponentialRampToValueAtTime(f2, t + d * .6); y.gain.setValueAtTime(g, t); y.gain.exponentialRampToValueAtTime(.001, t + d); x.connect(y).connect(mGain); x.start(t); x.stop(t + d + .02); };
+  const nz = (d, g, f, type = "bandpass") => { const len = AC.sampleRate * d | 0, b = AC.createBuffer(1, len, AC.sampleRate), a = b.getChannelData(0); for (let i = 0; i < len; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / len); const src = AC.createBufferSource(), fl = AC.createBiquadFilter(), y = AC.createGain(); fl.type = type; fl.frequency.value = f; y.gain.value = g; src.buffer = b; src.connect(fl).connect(y).connect(mGain); src.start(t); };
+  if (BELL.includes(s)) osc(s === 0 ? 1180 : 880, s === 0 ? 1170 : 870, .12, s === 0 ? .05 : .035, "triangle");
+  if (s === 0 || s === 6) osc(120, 52, .35, .35);                 // bass drum
+  if (s === 9 && Math.random() < .6) osc(100, 55, .25, .22);
+  if (s === 3 || s === 9) nz(.07, .2, 1800);                       // slap
+  if (s % 2 === 1) nz(.04, .06, 7000, "highpass");                 // shaker
+  for (const [st, f, r, g] of mPhrase) if (st === ph) {            // the talking drum: pitch squeezed up or down
+    osc(f, f * r, .34, g * .3, "triangle"); osc(f * 2, f * 2 * r, .2, g * .1); nz(.025, g * .2, 2600);
+  }
+}
+function musicStart() {
+  if (!music || mTimer) return;
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); } catch (e) { return; }
+  if (!mGain) { mGain = AC.createGain(); mGain.connect(AC.destination); }
+  mGain.gain.cancelScheduledValues(0); mGain.gain.setValueAtTime(0, AC.currentTime); mGain.gain.linearRampToValueAtTime(.55, AC.currentTime + 2);
+  mNext = AC.currentTime + .15; mStep = 0;
+  mTimer = setInterval(() => { while (mNext < AC.currentTime + .4) { playStep(mStep++, mNext); mNext += STEP; } }, 120);
+}
+function musicStop() { clearInterval(mTimer); mTimer = null; }
+
+function showRules() {
+  if ($("#rules")) return;
+  const d = document.createElement("div"); d.id = "rules"; d.className = "modal";
+  d.innerHTML = `<div class="sheet" role="dialog" aria-label="How to play"><h2>How to play Spar</h2><ol>
+    <li>2 to 4 players, 32 cards (no Aces). King is high, 6 is low. Everyone gets 5 cards, and a round is 5 tricks.</li>
+    <li>The leader plays any card. Everyone else <b>must follow the suit led</b> if they can. If they cannot, they may play anything.</li>
+    <li>The highest card of the suit led wins the trick and leads the next one. Off-suit cards never win.</li>
+    <li><b>Only the fifth trick scores.</b> Win it for 1 point, or 2 points if you win it with a 6. Winning earlier tricks only gives you the lead.</li>
+    <li><b>Standard:</b> first to the target score wins. <b>Knockout:</b> when you reach the target, the next player clockwise is knocked out and everyone's score resets. Last player standing wins.</li>
+    <li>Tip: save a strong card for the last trick. Played cards stay on the table, so you can track what is gone.</li></ol>
+    <div class="row"><button class="btn" id="rx">Got it</button></div></div>`;
+  document.body.appendChild(d);
+  const close = () => { d.remove(); document.removeEventListener("keydown", key); }, key = e => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", key); $("#rx").onclick = close; d.onclick = e => { if (e.target === d) close(); };
+}
+function initTools() {
+  const d = document.createElement("div"); d.className = "tools";
+  d.innerHTML = '<button class="ibtn" id="mus" aria-label="Music on or off">🥁</button><button class="ibtn" id="snd" aria-label="Sound effects on or off"></button><button class="ibtn" id="rl" aria-label="How to play">?</button>';
+  document.body.appendChild(d);
+  const upd = () => { $("#snd").textContent = muted ? "🔇" : "🔊"; $("#mus").classList.toggle("off", !music); }; upd();
+  $("#snd").onclick = () => { muted = !muted; lsSet("spar-mute", muted); upd(); sfx("pop"); };
+  $("#mus").onclick = () => { music = !music; lsSet("spar-music", music); upd(); music ? musicStart() : musicStop(); };
+  $("#rl").onclick = showRules;
+  const dr = document.createElement("div"); dr.className = "drift";
+  dr.innerHTML = Array.from({ length: 12 }, (_, i) => `<span style="left:${Math.random() * 100}%;font-size:${28 + Math.random() * 60 | 0}px;animation-duration:${18 + Math.random() * 20}s;animation-delay:-${Math.random() * 30}s;${i % 2 ? "color:rgba(206,17,38,.12)" : ""}">${"\u2660\u2665\u2663\u2666"[i % 4]}</span>`).join("");
+  document.body.prepend(dr);
+}
+function showEmoji(p, e) {
+  if (!lastV) return;
+  const el = document.querySelector(".seat.s-" + posFor(lastV, p)); if (!el) return;
+  const r = el.getBoundingClientRect(), b = document.createElement("div");
+  b.className = "bub"; b.textContent = e; b.style.left = r.left + r.width / 2 + "px"; b.style.top = r.top + "px";
+  document.body.appendChild(b); sfx("pop"); setTimeout(() => b.remove(), 2200);
+}
+function showFloat(p, txt) {
+  if (!lastV) return;
+  const el = document.querySelector(".seat.s-" + posFor(lastV, p)); if (!el) return;
+  const r = el.getBoundingClientRect(), b = document.createElement("div");
+  b.className = "flt"; b.textContent = txt; b.style.left = r.left + r.width / 2 + "px"; b.style.top = r.top + "px";
+  document.body.appendChild(b); setTimeout(() => b.remove(), 1900);
+}
+function chipify(sel) {   // turn a dropdown into tappable chips
+  sel.style.display = "none";
+  const row = document.createElement("div"); row.className = "chips";
+  row.innerHTML = [...sel.options].map(o => `<button type="button" data-v="${esc(o.value)}">${esc(o.textContent)}</button>`).join("");
+  sel.after(row);
+  const sync = () => row.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === sel.value));
+  row.onclick = e => { const b = e.target.closest("button"); if (!b) return; sel.value = b.dataset.v; sync(); if (sel.onchange) sel.onchange(); sfx("pop"); };
+  sync();
+}
+function confetti() {
+  const box = document.createElement("div"); box.className = "cfbox";
+  box.innerHTML = Array.from({ length: 50 }, () => `<i class="cf" style="left:${Math.random() * 100}%;background:${["#ce1126", "#f2b705", "#006b3f", "#fff"][Math.random() * 4 | 0]};animation-delay:${Math.random() * .8}s;animation-duration:${2 + Math.random() * 1.5}s"></i>`).join("");
+  document.body.appendChild(box); setTimeout(() => box.remove(), 4500);
+}
+function showInst() {   // "install on your phone" button
+  const el = $("#inst");
+  if (!el || matchMedia("(display-mode: standalone)").matches || navigator.standalone) return;
+  if (deferred) { el.innerHTML = '<button class="btn alt" id="ib">Install Spar on this device</button>'; $("#ib").onclick = async () => { deferred.prompt(); await deferred.userChoice; deferred = null; el.innerHTML = ""; }; }
+  else if (/iphone|ipad/i.test(navigator.userAgent)) el.textContent = "To install: tap Share, then Add to Home Screen.";
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; showInst(); });
+
+/* ---------- setup ---------- */
+function setup() {
+  runId++; clearTimeout(net.t);
+  if (G) { clearTimeout(G.timer); clearTimeout(G.cpuT); }
+  const old = net.peer; net = { peer: null, conn: null, isHost: false }; G = null; seen = {}; lastV = null;
+  if (old) old.destroy();
+  const S = lsGet("spar-settings", {}), sess = lsGet("spar-session", null);
+  app.className = "menu";
+  app.innerHTML = `<h1>SPAR</h1><div class="panel">
+    <label>Your name</label><input id="me" maxlength="14" value="${esc(S.name || "Player")}">
+    <label>Your avatar</label><div class="avpick" id="avpick"></div>
+    <label>Players</label><select id="n"><option>2</option><option>3</option><option>4</option></select>
+    <div id="opp"></div>
+    <label>Computer level</label><select id="lvl"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select>
+    <label>Game speed</label><select id="spd"><option value="relaxed">Relaxed</option><option value="normal">Normal</option><option value="fast">Fast</option></select>
+    <label>Mode</label><select id="mode"><option value="standard">Standard</option><option value="knockout">Knockout</option></select><div class="muted" id="mhint"></div>
+    <label>Target score</label><input id="target" type="number" min="1" value="${+S.target || CONFIG.defaultTarget}">
+    <p></p><div class="row"><button class="btn" id="go">Play</button></div></div>
+    <div class="panel"><b>Join a friend's game</b>
+    <label>Room code</label><input id="code" maxlength="5" style="text-transform:uppercase" value="${esc((new URLSearchParams(location.search).get("room") || "").toUpperCase().slice(0, 5))}">
+    <p></p><div class="row"><button class="btn alt" id="join">Join room</button></div></div>
+    ${sess ? `<div class="panel"><div class="row"><button class="btn alt" id="rj">Rejoin game ${esc(sess.code)}</button></div></div>` : ""}
+    <div id="inst" class="muted"></div>`;
+  $("#n").value = S.n || 2; $("#lvl").value = S.level || "normal"; $("#spd").value = S.speed || CONFIG.defaultSpeed; $("#mode").value = S.mode || "standard";
+  const hint = () => { $("#mhint").textContent = $("#mode").value === "knockout" ? "Reach the target to knock out the next player clockwise. Last one standing wins." : "First player to reach the target score wins."; };
+  $("#mode").onchange = hint; hint();
+  let myAv = Math.min(Math.max(+S.av || 0, 0), AVATARS.length - 1);
+  const drawAv = () => { $("#avpick").innerHTML = AVATARS.map((_, i) => `<button type="button" class="avb${i === myAv ? " on" : ""}" data-i="${i}" aria-label="Avatar ${i + 1}">${avatarSVG(i, i === myAv ? "happy" : "neutral")}</button>`).join(""); };
+  $("#avpick").onclick = e => { const b = e.target.closest(".avb"); if (b) { myAv = +b.dataset.i; drawAv(); sfx("pop"); } };
+  drawAv();
+  ["n", "lvl", "spd", "mode"].forEach(id => chipify($("#" + id)));
+  const lab = () => { $("#go").textContent = [...document.querySelectorAll(".op")].some(s => s.value === "online") ? "Create room" : "Play"; };
+  const opp = () => {
+    const n = +$("#n").value, cur = [...document.querySelectorAll(".op")].map(s => s.value), prev = cur.length ? cur : (S.ops || []);
+    $("#opp").innerHTML = Array.from({ length: n - 1 }, (_, i) =>
+      `<label>Opponent ${i + 1}</label><select class="op"><option value="cpu">Computer</option><option value="online"${prev[i] === "online" ? " selected" : ""}>Online friend</option></select>`).join("");
+    document.querySelectorAll(".op").forEach(s => { s.onchange = lab; chipify(s); }); lab();
+  };
+  $("#n").onchange = opp; opp();
+  const name = () => $("#me").value.trim().slice(0, 14) || "Player";
+  $("#go").onclick = () => {
+    const ops = [...document.querySelectorAll(".op")].map(s => s.value), cpu = shuffle(CONFIG.cpuNames.slice()); let k = 0;
+    const free = shuffle(AVATARS.map((_, i) => i).filter(i => i !== myAv));
+    const seats = [{ name: name(), type: "me", av: myAv }, ...ops.map((t, j) => t === "cpu" ? { name: cpu[k++], type: "cpu", av: free[j] } : { name: "Waiting…", type: "online", av: free[j] })];
+    const cfg = { seats, mode: $("#mode").value, target: Math.max(1, +$("#target").value || CONFIG.defaultTarget), level: $("#lvl").value, speed: $("#spd").value };
+    lsSet("spar-settings", { name: name(), n: seats.length, ops, mode: cfg.mode, target: cfg.target, level: cfg.level, speed: cfg.speed, av: myAv });
+    seats.some(s => s.type === "online") ? hostRoom(cfg) : (newGame(cfg), deal());
+  };
+  $("#join").onclick = () => {
+    const code = $("#code").value.trim().toUpperCase();
+    lsSet("spar-settings", { ...S, name: name(), av: myAv });
+    net.av = myAv;
+    joinRoom(code, name(), sess && sess.code === code ? sess.token : undefined);
+  };
+  if (sess) $("#rj").onclick = () => joinRoom(sess.code, sess.name, sess.token);
+  showInst();
+  if (!lsGet("spar-rules", 0)) { lsSet("spar-rules", 1); showRules(); }
+}
+function newGame(cfg) {
+  net.isHost = true;
+  G = { ...cfg, score: cfg.seats.map(() => 0), alive: cfg.seats.map(() => true), leader: 0, round: 0, tally: lsGet("spar-tally", {}), voids: [] };
+}
+function status(m, retry) {
+  app.className = "menu";
+  app.innerHTML = `<h1>SPAR</h1><div class="panel big">${esc(m)}<p></p><div class="row">${retry ? '<button class="btn" id="rt">Try again</button>' : ""}<button class="btn alt" id="bk">Back</button></div></div>`;
+  $("#bk").onclick = setup;
+  if (retry) $("#rt").onclick = retry;
+}
+
+/* ---------- online: host ---------- */
+const NET_HINT = "Could not reach the PeerJS connection server. It may be busy, or blocked on your network. Try another Wi-Fi or mobile data, and turn off any VPN or data saver.";
+const peerErr = e => ({
+  "peer-unavailable": "No room with that code was found. Check the code, and make sure the host is still on the lobby screen.",
+  "network": NET_HINT, "server-error": NET_HINT, "socket-error": NET_HINT, "socket-closed": NET_HINT,
+  "browser-incompatible": "This browser does not support online play.",
+  "webrtc": "The direct connection failed. Both players need internet access. Try a different network."
+}[e.type] || `Connection problem (${e.type || e}).`);
+const peerOpts = () => {   // add ?peerhost=your-server.com to the page link to use your own PeerServer
+  const h = new URLSearchParams(location.search).get("peerhost");
+  return Object.assign({ config: { iceServers: CONFIG.iceServers } }, CONFIG.peerServer || {}, h ? { host: h, port: 443, path: "/", secure: true } : {});
+};
+const PEER_SRC = ["https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js", "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js", "https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"];
+function loadPeer() {   // tries three CDNs in turn
+  if (window.Peer) return Promise.resolve();
+  return PEER_SRC.reduce((p, src) => p.catch(() => new Promise((ok, no) => {
+    const el = document.createElement("script"); el.src = src;
+    el.onload = () => window.Peer ? ok() : no(); el.onerror = no; document.head.appendChild(el);
+  })), Promise.reject());
+}
+function hostRoom(cfg) {
+  const id = ++runId; newGame(cfg); G.phase = "lobby";
+  const fail = m => { if (id !== runId) return; clearTimeout(net.t); if (net.peer) net.peer.destroy(); status(m, () => hostRoom(cfg)); };
+  status("Loading online play…");
+  loadPeer().then(() => {
+    if (id !== runId) return;
+    status("Creating your room…");
+    const open = tries => {
+      G.code = Array.from({ length: 5 }, () => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[Math.random() * 31 | 0]).join("");
+      const peer = net.peer = new Peer("spar-" + G.code, peerOpts());
+      let ready = false;
+      net.t = setTimeout(() => fail(NET_HINT), 15000);
+      peer.on("open", () => { if (id !== runId) return; ready = true; clearTimeout(net.t); lobby(); });
+      peer.on("connection", onConn);
+      peer.on("disconnected", () => { if (!peer.destroyed) peer.reconnect(); });
+      peer.on("error", e => {
+        if (ready) return console.warn(e);
+        if (e.type === "unavailable-id" && tries < 5) { clearTimeout(net.t); peer.destroy(); open(tries + 1); } else fail(peerErr(e));
+      });
+    };
+    open(0);
+  }).catch(() => fail("Could not load the online-play library. Check your internet connection and try again."));
+}
+function lobby() {
+  const missing = G.seats.some(s => s.type === "online" && !s.conn);
+  app.className = "menu";
+  app.innerHTML = `<h1>SPAR</h1><div class="panel big">Room code<div class="code">${G.code}</div>
+    <div class="muted">Friends choose "Join room" and type this code.</div><p></p>
+    ${G.seats.map(s => `<div class="lrow"><span class="av">${avatarSVG(s.av)}</span> ${esc(s.name)} <span class="muted">${s.type === "me" ? "(you)" : s.type === "cpu" ? "computer" : s.conn ? "online" : "open seat"}</span></div>`).join("")}
+    <p></p><div class="row"><button class="btn" id="st">${missing ? "Start now with computers" : "Start"}</button><button class="btn alt" id="cp">Share invite</button><button class="btn alt" id="bk">Cancel</button></div></div>`;
+  $("#st").onclick = () => { G.seats.forEach((s, i) => { if (s.type === "online" && !s.conn) { s.type = "cpu"; s.name = "CPU " + i; } }); deal(); };
+  $("#bk").onclick = setup;
+  $("#cp").onclick = async () => {
+    const h = new URLSearchParams(location.search).get("peerhost"), base = location.href.split("?")[0].split("#")[0];
+    const txt = `Join my Spar game: ${base}?room=${G.code}${h ? "&peerhost=" + encodeURIComponent(h) : ""} (room code ${G.code})`;
+    try { if (navigator.share) await navigator.share({ text: txt }); else { await navigator.clipboard.writeText(txt); $("#cp").textContent = "Copied!"; } } catch (e) {}
+  };
+}
+function onConn(c) {
+  c.on("data", d => {
+    if (!G) return;
+    if (d.t === "join") {
+      let i = d.token ? G.seats.findIndex(s => s.token === d.token) : -1;
+      if (i >= 0) {   // a player coming back after a dropped connection
+        const s = G.seats[i];
+        if (s.conn && s.conn !== c) { try { s.conn.close(); } catch (e) {} }
+        s.conn = c; s.away = false; c.seat = i; c.send({ t: "token", token: s.token });
+        return G.phase === "lobby" ? lobby() : broadcast();
+      }
+      i = G.seats.findIndex(s => s.type === "online" && !s.conn);
+      if (i < 0 || G.phase !== "lobby") { c.send({ t: "full", m: "That game is full or already started." }); return setTimeout(() => c.close(), 300); }
+      const s = G.seats[i];
+      s.conn = c; s.name = String(d.name || "Guest").slice(0, 14); c.seat = i;
+      const taken = new Set(G.seats.filter((_, j) => j !== i).map(x => x.av)); let av = Math.min(Math.max(+d.av | 0, 0), AVATARS.length - 1);
+      for (let t = 0; taken.has(av) && t < AVATARS.length; t++) av = (av + 1) % AVATARS.length;
+      s.av = av;
+      s.token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      c.send({ t: "token", token: s.token }); c.send({ t: "msg", m: "Connected. Waiting for the host to start…" });
+      if (G.seats.some(x => x.type === "online" && !x.conn)) lobby(); else deal();
+    } else if (c.seat == null) return;
+    else if (d.t === "play") doPlay(c.seat, d.i);
+    else if (d.t === "cut") doCut(c.seat, d.k);
+    else if (d.t === "skip") skip();
+    else if (d.t === "emo" && EMOJIS.includes(d.e)) emote(c.seat, d.e);
+  });
+  c.on("close", () => {
+    if (!G || c.seat == null) return;
+    const s = G.seats[c.seat]; if (s.conn !== c) return;
+    s.conn = null;
+    if (G.phase === "lobby") { s.name = "Waiting…"; s.token = null; lobby(); }
+    else { s.away = true; G.phase === "cut" ? cutBot() : tick(); }   // a computer plays for them until they return
+  });
+}
+
+/* ---------- online: guest ---------- */
+function joinRoom(code, name, token, tries = 0) {
+  if (code.length < 4) return status("Enter the room code from your host.");
+  const id = ++runId;
+  if (token) net.token = token;
+  const gone = net.peer; net.conn = null; net.peer = null; if (gone) gone.destroy();
+  const fail = m => { if (id !== runId) return; clearTimeout(net.t); const p = net.peer; net.conn = null; net.peer = null; if (p) p.destroy(); status(m, () => joinRoom(code, name, net.token)); };
+  status(tries ? "Reconnecting…" : "Loading online play…");
+  loadPeer().then(() => {
+    if (id !== runId) return;
+    if (!tries) status("Connecting to room " + code + "…");
+    const peer = net.peer = new Peer(peerOpts());
+    let linked = false, refused = false;
+    net.t = setTimeout(() => fail("Could not reach the room. Check the code, make sure the host is still online, and that you are both connected."), 20000);
+    peer.on("error", e => { if (!linked) fail(peerErr(e)); });
+    peer.on("open", () => {
+      const c = net.conn = peer.connect("spar-" + code, { reliable: true });
+      c.on("open", () => { linked = true; clearTimeout(net.t); c.send({ t: "join", name, token: net.token, av: net.av }); });
+      c.on("data", d => {
+        if (d.t === "view") render(d.v);
+        else if (d.t === "msg") status(d.m);
+        else if (d.t === "token") { net.token = d.token; lsSet("spar-session", { code, name, token: d.token }); }
+        else if (d.t === "emo") showEmoji(d.p, d.e);
+        else if (d.t === "full") { refused = true; lsDel("spar-session"); status(d.m); }
+      });
+      c.on("close", () => {
+        if (net.conn !== c || refused) return;
+        if (tries < 8) { status("Connection lost. Trying to reconnect…"); net.t = setTimeout(() => joinRoom(code, name, net.token, tries + 1), 2500); }
+        else status("The host left the game.");
+      });
+    });
+  }).catch(() => fail("Could not load the online-play library. Check your internet connection and try again."));
+}
+
+/* ---------- game engine (runs on the host) ---------- */
+function deal() {
+  G.round++; G.deck = shuffle(makeDeck()); G.table = []; G.laid = G.seats.map(() => []);
+  G.trick = 1; G.winIdx = -1; G.over = -1; G.msg = "";
+  if (G.round === 1) {   // round 1: a player cuts the deck, gets the first card, and leads
+    const al = G.seats.map((_, i) => i).filter(i => G.alive[i]);
+    G.cutter = al[Math.random() * al.length | 0]; G.turn = G.cutter;
+    G.hands = G.seats.map(() => []); G.phase = "cut"; broadcast(); cutBot();
+  } else { G.cutter = nextAlive(G.cutter); finishDeal(1 + Math.random() * (G.deck.length - 2) | 0); }
+}
+function cutBot() {
+  clearTimeout(G.cpuT);
+  if (G.phase === "cut" && isBot(G.seats[G.cutter])) G.cpuT = setTimeout(() => doCut(G.cutter, 6 + Math.random() * 20 | 0), SP().cpu[1]);
+}
+function doCut(seat, k) {
+  if (!G || G.phase !== "cut" || seat !== G.cutter) return;
+  clearTimeout(G.cpuT); G.leader = G.cutter;
+  finishDeal(Math.max(1, Math.min(G.deck.length - 1, k | 0)));
+}
+function finishDeal(k) {
+  G.deck = G.deck.slice(k).concat(G.deck.slice(0, k));   // the cut: the bottom part goes on top
+  const order = []; let p = G.cutter;
+  do { order.push(p); p = nextAlive(p); } while (p !== G.cutter);
+  G.hands = G.seats.map(() => []);
+  for (let j = 0; j < CONFIG.handSize; j++) order.forEach(q => G.hands[q].push(G.deck.shift()));   // cutter gets the first card
+  G.hands.forEach(h => h.sort((a, b) => CONFIG.suits.indexOf(a.s) - CONFIG.suits.indexOf(b.s) || a.v - b.v));
+  G.voids = G.seats.map(() => new Set()); G.turn = G.leader; G.phase = "play"; tick();
+}
+function wait(ms, fn) {   // a pause that anyone can skip by tapping the table
+  clearTimeout(G.timer); G.next = () => { clearTimeout(G.timer); G.next = null; fn(); }; G.timer = setTimeout(G.next, ms);
+}
+function skip() { if (G && G.next && (G.phase === "trick" || G.phase === "round")) G.next(); }
+function rematch() { G.score = G.seats.map(() => 0); G.alive = G.seats.map(() => true); G.round = 0; G.leader = 0; deal(); }
+function tick() {
+  broadcast(); clearTimeout(G.cpuT);
+  if (G.phase === "play" && isBot(G.seats[G.turn])) {
+    const [a, b] = SP().cpu, seat = G.turn;
+    G.cpuT = setTimeout(() => { if (G.phase === "play" && G.turn === seat) doPlay(seat, cpuPick(seat)); }, a + Math.random() * (b - a));
+  }
+}
+function view(i) {
+  const hand = G.hands[i], t = G.table, led = t.length ? t[0].card.s : null;
+  const mine = G.phase === "play" && G.turn === i, must = !!(led && hand.some(c => c.s === led));
+  return { names: G.seats.map(s => s.name), av: G.seats.map(s => s.av), lead: G.leader, trickMs: SP().trick, cpu: G.seats.map(isBot), alive: G.alive, score: G.score,
+    counts: G.hands.map(h => h.length), hand: hand.map(c => ({ ...c, ok: mine && (!must || c.s === led) })),
+    table: t, laid: G.laid, turn: G.turn, trick: G.trick, round: G.round, phase: G.phase, msg: G.msg, mode: G.mode,
+    target: G.target, me: i, led, must, winIdx: G.winIdx, cutter: G.cutter, deckN: G.deck ? G.deck.length : 0,
+    over: G.over, tally: G.phase === "over" ? G.tally : null };
+}
+function broadcast() {
+  G.seats.forEach((s, i) => { if (s.conn && s.conn.open) s.conn.send({ t: "view", v: view(i) }); });
+  render(view(0));
+}
+function emote(p, e) {
+  if (!G) return;
+  showEmoji(p, e);
+  G.seats.forEach(s => { if (s.conn && s.conn.open) s.conn.send({ t: "emo", p, e }); });
+}
+function doPlay(seat, i) {
+  if (!G || G.phase !== "play" || seat !== G.turn) return;
+  const hand = G.hands[seat], card = hand[i];
+  if (!card) return;
+  const led = G.table.length ? G.table[0].card.s : null;
+  if (led && card.s !== led && hand.some(c => c.s === led)) return;   // follow-suit rule
+  hand.splice(i, 1); G.table.push({ p: seat, card });
+  if (G.table.length < G.alive.filter(Boolean).length) { G.turn = nextAlive(seat); return tick(); }
+  endTrick();
+}
+function endTrick() {
+  const led = G.table[0].card.s; let w = 0;
+  G.table.forEach((t, k) => { if (t.card.s === led && t.card.v > G.table[w].card.v) w = k; });
+  G.table.forEach(t => { if (t.card.s !== led) G.voids[t.p].add(led); });   // who is out of which suit (used by the Hard computer)
+  const win = G.table[w], last = G.trick === CONFIG.handSize;
+  G.winIdx = w; G.turn = win.p; G.phase = "trick"; G.msg = `${G.seats[win.p].name} wins trick ${G.trick}`;
+  broadcast();
+  if (isBot(G.seats[win.p]) && Math.random() < .2) setTimeout(() => emote(win.p, ["😎", "🔥", "😂"][Math.random() * 3 | 0]), 600);
+  wait(SP().trick, () => {
+    if (last) return endRound(win);
+    G.table.forEach(t => G.laid[t.p].push(t.card));   // played cards stay on the table until the round ends
+    G.trick++; G.table = []; G.winIdx = -1; G.phase = "play"; G.msg = ""; tick();
+  });
+}
+function endRound(win) {
+  const p = win.p, nm = i => G.seats[i].name;
+  const pts = win.card.r === CONFIG.bonusRank ? CONFIG.bonusPoints : CONFIG.normalPoints;
+  G.score[p] += pts;
+  let m = `${nm(p)} wins the round with ${win.card.r}${win.card.s}: +${pts} point${pts > 1 ? "s" : ""}.`, over = -1;
+  if (G.score[p] >= G.target) {
+    if (G.mode === "standard") over = p;
+    else {
+      const v = nextAlive(p); G.alive[v] = false;
+      m += ` Target reached: ${nm(v)} is knocked out!`;
+      G.score = G.score.map(() => 0);
+      if (G.alive.filter(Boolean).length === 1) over = p;
+    }
+  }
+  G.leader = p;
+  if (over >= 0) {
+    G.phase = "over"; G.over = over; G.msg = m + ` ${nm(over)} wins the game!`;
+    G.tally[nm(over)] = (G.tally[nm(over)] || 0) + 1; lsSet("spar-tally", G.tally);
+    return broadcast();
+  }
+  G.phase = "round"; G.msg = m; broadcast();
+  wait(SP().round, deal);
+}
+
+/* ---------- computer players ---------- */
+function cpuPick(seat) {
+  const hand = G.hands[seat], led = G.table.length ? G.table[0].card.s : null, lvl = G.level || "normal";
+  let opts = hand.map((_, i) => i);
+  if (led && hand.some(c => c.s === led)) opts = opts.filter(i => hand[i].s === led);
+  if (lvl === "easy" || (lvl === "normal" && Math.random() < CONFIG.cpuMistakes)) return opts[Math.random() * opts.length | 0];
+  if (lvl === "hard" && opts.length > 1) return cpuHard(seat, opts);
+  const low = [...opts].sort((a, b) => hand[a].v - hand[b].v);   // normal: play low, save high cards for the last trick
+  if (led && hand.length === 2) {            // trick 4: try to win cheaply and lead the last trick
+    const top = Math.max(...G.table.filter(t => t.card.s === led).map(t => t.card.v));
+    const w = low.find(i => hand[i].s === led && hand[i].v > top);
+    if (w !== undefined && hand[w].v <= hand[1 - w].v) return w;
+  }
+  return low[0];
+}
+/* Hard: remembers every card played, guesses what the others hold (respecting suits they ran out of),
+   plays out the rest of the round many times for each choice, and picks the one that wins most. */
+function cpuHard(seat, opts) {
+  const hand = G.hands[seat];
+  const known = new Set([...hand, ...G.laid.flat(), ...G.table.map(t => t.card)].map(c => c.r + c.s));
+  const unseen = makeDeck().filter(c => !known.has(c.r + c.s));
+  const samples = Array.from({ length: 80 }, () => sampleHands(seat, unseen));
+  const order = [...opts].sort((a, b) => hand[a].v - hand[b].v);
+  let best = order[0], bv = -1;
+  for (const i of order) {
+    let tot = 0;
+    for (const hs of samples) {
+      const r = playOut(hs, G.table, G.turn, G.alive, hand[i]);
+      if (r.p === seat) tot += r.card.r === CONFIG.bonusRank ? CONFIG.bonusPoints : CONFIG.normalPoints;
+    }
+    if (tot > bv) { bv = tot; best = i; }
+  }
+  return best;
+}
+function sampleHands(seat, unseen) {
+  for (let t = 0; t < 20; t++) {
+    const pool = shuffle(unseen.slice()); let ok = true;
+    const hs = G.hands.map((h, p) => {
+      if (p === seat) return h;
+      const mine = pool.splice(0, h.length);
+      if (mine.some(c => G.voids[p].has(c.s))) ok = false;
+      return mine;
+    });
+    if (ok || t === 19) return hs;
+  }
+}
+function playOut(hands0, table0, turn, alive, first) {   // finish the round with everyone playing their lowest legal card
+  const hands = hands0.map(h => h.slice()), n = alive.length, cnt = alive.filter(Boolean).length;
+  let table = table0.slice();
+  const nxt = i => { do { i = (i + 1) % n; } while (!alive[i]); return i; };
+  for (;;) {
+    const h = hands[turn], led = table.length ? table[0].card.s : null;
+    let card = first; first = null;
+    if (!card) { const o = led && h.some(c => c.s === led) ? h.filter(c => c.s === led) : h; card = o.reduce((a, b) => b.v < a.v ? b : a); }
+    h.splice(h.indexOf(card), 1); table.push({ p: turn, card });
+    if (table.length < cnt) { turn = nxt(turn); continue; }
+    const l = table[0].card.s; let w = table[0];
+    for (const t of table) if (t.card.s === l && t.card.v > w.card.v) w = t;
+    if (!hands[w.p].length) return w;
+    table = []; turn = w.p;
+  }
+}
+
+/* ---------- table rendering (same for host and guests) ---------- */
+function send(i) { net.isHost ? doPlay(0, i) : net.conn && net.conn.send({ t: "play", i }); }
+function cutSend(k) { net.isHost ? doCut(0, k) : net.conn && net.conn.send({ t: "cut", k }); }
+function skipSend() { net.isHost ? skip() : net.conn && net.conn.send({ t: "skip" }); }
+function emoSend(e) { net.isHost ? emote(0, e) : net.conn && net.conn.send({ t: "emo", e }); }
+function soundDiff(a, v) {
+  if (!a || a.round !== v.round) { if (v.phase === "play") sfx("deal"); }
+  else if (v.table.length > a.table.length) sfx("card");
+  if (a && a.phase !== v.phase) {
+    if (v.phase === "trick") sfx(v.table[v.winIdx] && v.table[v.winIdx].p === v.me ? "win" : "tick");
+    else if (v.phase === "round") sfx(/knocked/.test(v.msg) ? "ko" : "tick");
+    else if (v.phase === "over") sfx(v.over === v.me ? "fanfare" : "ko");
+  }
+  if (v.phase === "play" && v.turn === v.me && v.alive[v.me] && (!a || a.phase !== "play" || a.turn !== v.me)) {   // your turn: chime and a tiny buzz
+    sfx("turn"); try { navigator.vibrate && navigator.vibrate(25); } catch (e) {}
+  }
+}
+function renderCut(v) {
+  const mine = v.cutter === v.me, N = v.deckN;
+  app.className = "menu";
+  app.innerHTML = `<h1 class="sm">SPAR</h1><div class="panel big"><div class="stack">${'<div class="back"></div>'.repeat(8)}</div>
+    ${mine ? `Your turn to cut the deck.<div class="muted">Slide to choose where to cut. You get the first card and lead the first trick.</div>
+    <input id="cutk" type="range" min="1" max="${N - 1}" value="${8 + Math.random() * 16 | 0}" aria-label="Cut position">
+    <div class="muted" id="cutinfo"></div><p></p><button class="btn" id="cut">Cut the deck</button>` : `${esc(v.names[v.cutter])} is cutting the deck…`}</div>`;
+  if (mine) {
+    const upd = () => { const k = +$("#cutk").value; $("#cutinfo").textContent = `Top pile ${k} cards, bottom pile ${N - k} cards`; };
+    $("#cutk").oninput = upd; upd(); $("#cut").onclick = () => cutSend(+$("#cutk").value);
+  }
+}
+function render(v) {
+  const prev = lastV; soundDiff(prev, v); lastV = v;
+  if (v.phase === "cut") return renderCut(v);
+  const pos = p => posFor(v, p);
+  const gain = p => prev && prev.round === v.round && v.score[p] > prev.score[p] ? v.score[p] - prev.score[p] : 0;
+  const live = p => v.turn === p && v.alive[p] && v.phase !== "over";
+  const moodOf = p => {
+    if (v.phase === "over") return p === v.over ? "cool" : "sad";
+    if (!v.alive[p]) return "sad";
+    if (v.phase === "round") return p === v.lead ? "happy" : "sad";
+    if (v.phase === "trick") return v.table[v.winIdx] && v.table[v.winIdx].p === p ? "happy" : "neutral";
+    return v.turn === p ? "think" : "neutral";
+  };
+  const pips = p => v.target <= 7 ? "●".repeat(Math.min(v.score[p], v.target)) + "○".repeat(Math.max(0, v.target - v.score[p])) : "";
+  const who = (p, tag = "") => `<div class="who"><div class="av">${avatarSVG(v.av[p], moodOf(p))}</div><div class="plate"><span class="nm">${esc(v.names[p])}${tag}</span><span class="${gain(p) ? "score-bump" : ""}">${v.cpu[p] ? "🤖 " : ""}${v.score[p]}</span><span class="pg">${pips(p)}</span></div></div>`;
+  const seatHTML = p => {
+    const s = pos(p); if (s === "me") return "";
+    const side = s !== "top";
+    return `<div class="seat s-${s}${live(p) ? " turn" : ""}${v.alive[p] ? "" : " out"}">${who(p)}
+      <div class="fan${side ? " v" : ""}">${`<div class="back${side ? " side" : ""}"></div>`.repeat(v.counts[p])}</div></div>`;
+  };
+  const OFF = { me: [0, 42], top: [0, -42], left: [-34, 0], right: [34, 0] };
+  const lanes = v.names.map((_, p) => `<div class="lane l-${pos(p)}">${v.laid[p].map(c => `<div class="card face mini${RED.has(c.s) ? " red" : ""}">${inner(c)}</div>`).join("")}</div>`).join("");
+  const SW = { me: [0, 150], top: [0, -150], left: [-120, 0], right: [120, 0] };
+  const sweep = v.phase === "trick" && v.trick < CONFIG.handSize && v.winIdx >= 0 && !!v.table[v.winIdx];
+  const [wx, wy] = sweep ? SW[pos(v.table[v.winIdx].p)] : [0, 0];
+  const played = v.table.map((t, k) => {
+    const [dx, dy] = OFF[pos(t.p)], key = v.round + "-" + v.trick + "-" + t.p, isNew = !seen[key]; seen[key] = 1;
+    const r = ((t.p * 37 + v.trick * 53) % 17) - 8;
+    return `<div class="pl${isNew ? " new" : ""}${k === v.winIdx ? " win" : ""}${sweep ? " sweep" : ""}" style="--dx:${dx}px;--dy:${dy}px;--r:${r}deg;--fx:${dx * 3}px;--fy:${dy * 3}px;--wx:${wx}px;--wy:${wy}px;--sdel:${Math.round(v.trickMs * .55)}ms;--sdur:${Math.round(v.trickMs * .3)}ms;z-index:${k}">${face(t.card)}</div>`;
+  }).join("");
+  const dealIt = v.phase === "play" && v.trick === 1 && !v.table.length && !seen["d" + v.round]; if (dealIt) seen["d" + v.round] = 1;
+  const hand = v.hand.map((c, i) => `<button class="card face${RED.has(c.s) ? " red" : ""}${c.ok ? " ok" : ""}${v.phase === "play" && v.turn === v.me && !c.ok ? " no" : ""}${dealIt ? " dealt" : ""}" style="--i:${i};--rot:${((i - (v.hand.length - 1) / 2) * 7).toFixed(1)}deg;--ar:${(Math.abs(i - (v.hand.length - 1) / 2) ** 2 * 2).toFixed(1)}px" data-i="${i}"${c.ok ? "" : " disabled"}>${inner(c)}</button>`).join("");
+  let st = v.msg;
+  if (v.phase === "play") st = v.turn === v.me
+    ? (v.led ? (v.must ? `Your turn: follow ${v.led}` : `You have no ${v.led}. Play any card`) : "You lead. Play any card")
+    : `${v.names[v.turn]} is playing…`;
+  if (!v.alive[v.me] && v.phase === "play") st = "You are knocked out. Watching the rest.";
+  if (v.phase === "over" && !seen["cf" + v.round]) { seen["cf" + v.round] = 1; confetti(); }
+  if (v.phase === "over" && !net.isHost) lsDel("spar-session");
+  const wins = v.tally ? Object.entries(v.tally).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([n, w]) => `${esc(n)} ${w}`).join(" · ") : "";
+  const stPop = st !== lastSt; lastSt = st;
+  const finalTrick = v.trick >= CONFIG.handSize && v.phase !== "round" && v.phase !== "over";
+  app.className = "game";
+  app.innerHTML = `<h1 class="sm">SPAR</h1>
+    <div class="muted">${v.mode === "knockout" ? "Knockout" : "Standard"}, first to ${v.target} · round ${v.round} · ${finalTrick ? '<b class="finalt">FINAL TRICK: this one scores</b>' : `trick ${v.trick} of ${CONFIG.handSize}`}</div>
+    <div class="scene">${LIGHTS}<div class="rim"><div class="felt">${v.names.map((_, p) => seatHTML(p)).join("")}
+      ${lanes}<div class="center">${played}</div>
+      <div class="seat s-me${live(v.me) ? " turn" : ""}">${who(v.me, " (you)")}<div class="hand">${hand}</div></div>
+    </div></div></div>
+    <div class="status${stPop ? " pop" : ""}"><span class="${v.phase === "play" && v.turn === v.me ? "mine" : ""}">${esc(st)}</span>${v.phase === "trick" || v.phase === "round" ? "<small>tap the table to continue</small>" : ""}</div>
+    <div class="emo">${EMOJIS.map(e => `<button class="ibtn" data-e="${e}" aria-label="React ${e}">${e}</button>`).join("")}</div>
+    ${v.phase === "over" ? `<div class="panel big"><div class="av big">${avatarSVG(v.av[v.over], "cool")}</div><div class="trophy">🏆</div><div class="winner">${esc(v.names[v.over])} wins!</div>${wins ? `<div class="muted">Wins: ${wins}</div>` : ""}<div class="row">${net.isHost ? '<button class="btn" id="again">Play again</button>' : ""}<button class="btn alt" id="end">${net.isHost ? "Main menu" : "Leave"}</button></div></div>` : ""}`;
+  document.querySelectorAll(".hand button").forEach(b => b.onclick = () => send(+b.dataset.i));
+  document.querySelectorAll(".emo button").forEach(b => b.onclick = () => emoSend(b.dataset.e));
+  v.names.forEach((_, p) => { if (gain(p)) showFloat(p, "+" + gain(p)); else if (prev && prev.alive[p] && !v.alive[p]) showFloat(p, "OUT!"); });
+  const fe = $(".felt"); if (fe) fe.onclick = e => { if (!e.target.closest(".hand") && (v.phase === "trick" || v.phase === "round")) skipSend(); };
+  if ($("#end")) $("#end").onclick = setup;
+  if ($("#again")) $("#again").onclick = rematch;
+}
+
+initTools();
+setup();
+document.addEventListener("pointerdown", musicStart);   // browsers only allow sound after a tap
+document.addEventListener("visibilitychange", () => document.hidden ? musicStop() : musicStart());
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
